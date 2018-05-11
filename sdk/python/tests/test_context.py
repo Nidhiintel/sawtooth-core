@@ -1,4 +1,4 @@
-# Copyright 2017 Intel Corporation
+# Copyright 2018 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,12 +15,19 @@
 
 import unittest
 from unittest.mock import Mock
+import tempfile
+import os
+import uuid
 
 from collections import OrderedDict
+from sawtooth_sdk.processor.config import get_log_config
+from sawtooth_sdk.processor.config import get_log_dir
+from sawtooth_sdk.processor.config import get_processor_config
 
 from sawtooth_sdk.processor.context import Context
 from sawtooth_sdk.messaging.future import Future
 from sawtooth_sdk.messaging.future import FutureResult
+from sawtooth_sdk.messaging.future import FutureCollection
 
 from sawtooth_sdk.protobuf.validator_pb2 import Message
 from sawtooth_sdk.protobuf.state_context_pb2 import TpStateEntry
@@ -144,3 +151,117 @@ class ContextTest(unittest.TestCase):
                     event_type="test",
                     attributes=[Event.Attribute(key="test", value="test")],
                     data=b"test")).SerializeToString())
+
+
+class ConfigTest(unittest.TestCase):
+    def test_get_dir(self):
+        """Tests the return value of directory path based on
+           configuration.
+        """
+        os.environ.clear()
+        directory = tempfile.mkdtemp(prefix="test-path-config-")
+        try:
+            os.environ['SAWTOOTH_HOME'] = directory
+            config_dir = os.path.join(directory, 'etc')
+            os.mkdir(config_dir)
+            filename = os.path.join(config_dir, 'path.toml')
+            with open(filename, 'w') as fd:
+                fd.write(" ")
+            config = get_log_dir()
+            sawtooth_home_dir = 'logs'
+            self.assertEqual(config, os.path.join(os.environ['SAWTOOTH_HOME'],
+                                                  sawtooth_home_dir))
+        finally:
+            pass
+
+    def test_get(self):
+        """Tests if the directory path is based on OS defaults.
+        """
+        os.name = "nt"
+        config = get_log_dir()
+        self.assertEqual(config, os.path.join('/usr', 'logs'))
+
+    def test_get_log_config(self):
+        """Tests if there is a log config file in the config directory
+           and ends with .yaml extension.
+       """
+        os.environ.clear()
+        directory = tempfile.mkdtemp(prefix="test-path-config-")
+        try:
+            os.environ['SAWTOOTH_HOME'] = directory
+            config_dir = os.path.join(directory, 'logs')
+            os.mkdir(config_dir)
+            filename = os.path.join(config_dir, 'intkey_logs_config.yaml')
+            with open(filename, 'w') as fd:
+                fd.write(" ")
+            config = get_log_config(filename)
+            self.assertEqual(config, None)
+        finally:
+            pass
+
+    def test_none_file(self):
+        """Tests the function when log config file does not exist
+           and returns None.
+       """
+        filename = None
+        config = get_log_config(filename)
+        self.assertEqual(config, None)
+
+    def test_get_log_config_new(self):
+        """Tests if log config file in the config directory
+           does not end with .yaml extension.
+       """
+        os.environ.clear()
+        directory = tempfile.mkdtemp(prefix="test-path-config-")
+        try:
+            os.environ['SAWTOOTH_HOME'] = directory
+            config_dir = os.path.join(directory, 'logs')
+            os.mkdir(config_dir)
+            filename = os.path.join(config_dir, 'intkey_logs_config.yaml ')
+            with open(filename, 'w') as fd:
+                fd.write(" ")
+            config = get_log_config(filename)
+            self.assertEqual(config, {})
+        finally:
+            pass
+
+    def test_get_processor_config(self):
+        """Tests if there is a proccesor config in the config directory
+           and returns it.
+       """
+        os.environ.clear()
+        directory = tempfile.mkdtemp(prefix="test-path-config-")
+        try:
+            os.environ['SAWTOOTH_HOME'] = directory
+            config_dir = os.path.join(directory, 'etc')
+            os.mkdir(config_dir)
+            filename = os.path.join(config_dir, 'path.toml')
+            with open(filename, 'w') as fd:
+                fd.write(" ")
+                config = get_processor_config(filename)
+                log_config = {}
+                self.assertEqual(config, log_config)
+        finally:
+            pass
+
+
+class FutureTest(unittest.TestCase):
+    def test_future(self):
+        """Tests the init() method and done() function.
+        """
+        obj = Future("")
+        done = obj.done()
+        bool_value = False
+        self.assertEqual(done, bool_value)
+
+    def test_futurecollection(self):
+        """Tests the future_collection_method() initialize
+           correlation id, put() and set_result() function.
+        """
+        obj = FutureCollection()
+        correlation_id = uuid.uuid4().hex.encode()
+        result = None
+        obj1 = Future(correlation_id)
+        obj.put(obj1)
+        obj.set_result(correlation_id, result)
+        self.assertEqual(result, None)
